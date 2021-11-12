@@ -10,6 +10,8 @@ import numpy as np
 from skimage.exposure import rescale_intensity, histogram
 import matplotlib.pyplot as plt
 from PIL import Image, ImageEnhance
+import base64
+import pandas as pd
 
 path_out = "/Users/kanferg/Desktop/NIH_Youle/Python_projacts_general/dash/Table_interactive_montage/temp/"
 image_directory = "/Users/kanferg/Desktop/NIH_Youle/Python_projacts_general/dash/Table_interactive_montage/Image_example/"
@@ -25,27 +27,40 @@ def show_image_adjust(image, low_prec, up_prec):
     return scaled_ch1
 
 
+# create the 96 well plate layout
+
+ind = ["B", "C", "D", "E", "F", "G"]
+_col = ["02", "03", "04", "05", "06", "07", "08", "09","10"]
+values = {"02":[], "03":[], "04":[], "05":[], "06":[], "07":[], "08":[], "09":[], "10":[]}
+for i in range(len(_col)):
+    for z in range(len(ind)):
+        values[_col[i]].append(ind[z]+_col[i])
+print(values)
+df = pd.DataFrame(values)
+
 app = dash.Dash()
 
 app.layout = html.Div([
-    dcc.Dropdown(
-        id='image-dropdown',
-        options=[{'label': i, 'value': i} for i in list_of_images],
-        value=list_of_images[0]
-    ),
+    dash_table.DataTable(
+        id='datatable-interactivity',
+        columns=[{"name": i, "id": i, "deletable": False, "selectable": True} for i in df.columns],
+        data=df.to_dict('records'),
+        style_cell={'minWidth': 95, 'maxWidth': 95, 'width': 95}),
     dcc.Slider(
         id='my-slider_low_prec',
         min=1,
         max=99,
         step=5,
         value=1,
+        vertical=True,
     ),
     dcc.Slider(
-            id='my-slider_up_prec',
-            min=1,
-            max=99,
-            step=5,
-            value=99,
+        id='my-slider_up_prec',
+        min=1,
+        max=99,
+        step=5,
+        value=99,
+        vertical=True,
         ),
     html.Button('Submit', id='submit-val', n_clicks=0),
     html.Img(id='image',style={'height':'10%', 'width':'10%'})
@@ -54,20 +69,22 @@ app.layout = html.Div([
 @app.callback(
     Output('image', 'src'),
     [Input('submit-val', 'n_clicks'),
-    State('image-dropdown', 'value'),
+    State('datatable-interactivity', 'active_cell'),
     State('my-slider_low_prec', 'value'),
     State('my-slider_up_prec', 'value')],
     prevent_intial_call=True)
-def update_image_src(n,dropdown,low,high):
-    if len(dropdown) > 0:
+def update_image_src(n,active_cell,low,high):
+    if len(active_cell) > 0:
+        ind = df.iloc[active_cell['row'], active_cell['column']]
+
         os.chdir(image_directory)
         pixels = tfi.imread(dropdown)
         img = show_image_adjust(pixels,low,high)
         im_pil=Image.fromarray(np.uint8(img))
         os.chdir(path_out)
         im_pil.save("1.png", format='png')
-        img_name = "1.png"
-        return path_out + '/' + img_name
+         encoded_image = base64.b64encode(open("1.png", 'rb').read())
+        return 'data:image/png;base64,{}'.format(encoded_image.decode())
     elif len(dropdown) == 0:
         raise dash.exceptions.PreventUpdate
 
