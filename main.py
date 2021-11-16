@@ -2,6 +2,7 @@ import dash
 import dash.exceptions
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 import dash_table
 from dash.dependencies import Input, Output, State
 import tifffile as tfi
@@ -15,6 +16,7 @@ import base64
 import pandas as pd
 import re
 from random import randint
+from io import BytesIO
 
 
 path_out = "/Users/kanferg/Desktop/NIH_Youle/Python_projacts_general/dash/Table_interactive_montage/temp/"
@@ -69,32 +71,56 @@ for i in range(len(_col)):
 print(values)
 df = pd.DataFrame(values)
 
-app = dash.Dash()
+#app = dash.Dash()
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
 app.layout = html.Div([
     dash_table.DataTable(
-        id='datatable-interactivity',
-        columns=[{"name": i, "id": i, "deletable": False, "selectable": True} for i in df.columns],
-        data=df.to_dict('records'),
-        style_cell={'minWidth': 95, 'maxWidth': 95, 'width': 95}),
-    dcc.Slider(
-        id='my-slider_low_prec',
-        min=1,
-        max=99,
-        step=5,
-        value=1,
-        vertical=True,
+            id='datatable-interactivity',
+            columns=[{"name": i, "id": i, "deletable": False, "selectable": True} for i in df.columns],
+            data=df.to_dict('records'),
+            style_cell={'minWidth': 95, 'maxWidth': 95, 'width': 95},
+            style_header={
+                    'backgroundColor': 'rgb(210, 210, 210)',
+                    'color': 'black',
+                    'fontWeight': 'bold'
+                },
+            style_data={
+                    'color': 'black',
+                    'backgroundColor': 'white'
+                },
     ),
-    dcc.Slider(
-        id='my-slider_up_prec',
-        min=1,
-        max=99,
-        step=5,
-        value=99,
-        vertical=True,
-    ),
-    html.Button('Submit', id='submit-val', n_clicks=0),
-    html.Img(id='image', style={'height': '10%', 'width': '10%'})
+    dbc.Row([
+        dbc.Col(
+            dcc.Slider(
+                id='my-slider_low_prec',
+                min=1,
+                max=99,
+                step=1,
+                value=1,
+                vertical=False,
+                ), width={'size': 3, "offset": 0}),
+        dbc.Col(
+            dcc.Slider(
+                id='my-slider_up_prec',
+                 min=1,
+                max=99,
+                step=1,
+                value=99,
+                vertical=False,
+                ), width={'size': 3, "offset": 0})]),
+    dbc.Row([
+        dbc.Col(
+            html.Button('Submit', id='submit-val', n_clicks=0)
+            , width={'size': 3, "offset": 0}),
+        dbc.Col(
+            dcc.Dropdown(id='dropdown_channel',
+                         options=[{'label': i, 'value': i}
+                                  for i in ['ch1', 'ch2']])
+            , width={'size': 3, "offset": 0}),
+        ]),
+
+    html.Img(id='image', style={'height': '50%', 'width': '50%'})
 ])
 
 
@@ -102,17 +128,23 @@ app.layout = html.Div([
     Output('image', 'src'),
     [Input('submit-val', 'n_clicks'),
      State('datatable-interactivity', 'active_cell'),
+     State('dropdown_channel','value'),
      State('my-slider_low_prec', 'value'),
      State('my-slider_up_prec', 'value')],
     prevent_intial_call=True)
-def update_image_src(n, active_cell, low, high):
+def update_image_src(n, active_cell, channel ,low, high):
     if len(active_cell) > 0:
+        if channel == 'ch1':
+            ch = 0
+        else:
+            ch = 1
         ind = df.iloc[active_cell['row'], active_cell['column']]
         os.chdir(path)
         file = get_file(ind,files)
         pixels = tfi.imread(file)
+        pixels = pixels[:,:,ch]
         img = show_image_adjust(pixels, low, high)
-        im_pil = Image.fromarray(np.uint8(img))
+        im_pil = Image.fromarray(np.uint16(img))
         os.chdir(path_out)
         im_pil.save("1.png", format='png')
         encoded_image = base64.b64encode(open("1.png", 'rb').read())
@@ -122,4 +154,5 @@ def update_image_src(n, active_cell, low, high):
 
 if __name__ == '__main__':
     app.run_server()
+
 
